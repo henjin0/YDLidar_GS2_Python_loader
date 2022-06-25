@@ -2,6 +2,7 @@ import serial
 import matplotlib.pyplot as plt
 from CalcLidar import calclidar
 import time
+import cmath
 
 
 # note: グラフ化して確認したい際にコメントアウト解除する。
@@ -93,42 +94,21 @@ while True:
         startlidar(ser)
         continue
 
-    packetHeaderNumber = hex(int.from_bytes(datas[0:4],"little"))
+    rt = cl.receiveDataCalc(datas)
 
-    addressNumber = hex(datas[4])
-    comemandTypeNumber = hex(datas[5])
-    dataLengthNumber = int(datas[7]<<8 | datas[6])
-    ENV = int(datas[9]<<8 | datas[8])
-    checkCodeNumber = hex(datas[330])
-
-    distance2 = []
-    thetas = []
-    for i in range(int(len(datas[10:-1])/2)):
-        tempDist = (datas[8+2*i+1]<<8 | datas[8+2*i]) & 0x01ff
-        if i < 80:
-            Dist,theta = cl.leftCalc(tempDist,i)
-        else:
-            Dist,theta = cl.rightCalc(tempDist,i)
-
-        distance2.append(Dist)
-        thetas.append(theta)
-
-    
-    ltheta = thetas[:80]
-    rtheta = thetas[80:]
+    ltheta = rt.thetas[:80]
+    rtheta = rt.thetas[80:]
     
     # note: グラフ化した際にコメントアウトを解除する。
     # if('line' in locals()):
     #     line.remove()
     # if('line2' in locals()):
     #     line2.remove()
-    # line = ax.scatter(ltheta, distance2[:80], c="red", s=5)
-    # line2 = ax.scatter(rtheta, distance2[80:], c="blue", s=5)
+    # line = ax.scatter(ltheta, rt.distance[:80], c="red", s=5)
+    # line2 = ax.scatter(rtheta, rt.distance[80:], c="blue", s=5)
     # ax.set_theta_offset(cmath.pi / 2)
     # ax.set_theta_offset(cmath.pi / 2)
     # plt.pause(0.00001)
-
-    distance2.clear()
     
 
 
