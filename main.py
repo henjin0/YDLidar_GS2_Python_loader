@@ -99,7 +99,7 @@ while True:
     ltheta = rt.thetas[:80]
     rtheta = rt.thetas[80:]
     
-    # note: グラフ化した際にコメントアウトを解除する。
+    # note: グラフ化して確認したい際にコメントアウト解除する。
     # if('line' in locals()):
     #     line.remove()
     # if('line2' in locals()):
