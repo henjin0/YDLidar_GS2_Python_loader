@@ -1,75 +1,9 @@
-from cmath import pi
-import cmath
-from tabnanny import check
 from turtle import distance
 import serial
-import binascii
 import matplotlib.pyplot as plt
-import math
-import numpy as np
-
-# init
-d_compensateK0 = 0.0
-d_compensateB0 = 0.0
-d_compensateK1 = 0.0
-d_compensateB1 = 0.0
-bias = 0.0
-
-angle_p_x =  1.22
-angle_p_y = 5.315
-angle_p_angle = 22.5
-
-def leftCamThetaCalc(measurement_point):
-    measurement_point = 80-measurement_point
-    if d_compensateB0 > 1:
-        tempTheta = d_compensateK0 * measurement_point - d_compensateB0
-    else:
-        tempTheta = cmath.atan(d_compensateK0 * measurement_point - d_compensateB0).real * 180 / cmath.pi
-    
-    return tempTheta
-
-def rightCamThetaCalc(measurement_point):
-    measurement_point = 160 - measurement_point 
-    if d_compensateB1 > 1:
-        tempTheta = d_compensateK1 * measurement_point - d_compensateB1
-    else:
-        tempTheta = cmath.atan(d_compensateK1 * measurement_point - d_compensateB1).real * 180 / cmath.pi
-    
-    return tempTheta
-
-def leftCalc(tempDist_,thetas_rad):
-    tempDist = (tempDist_ - angle_p_x) / cmath.cos((angle_p_angle +bias - (thetas_rad*180/cmath.pi)) * cmath.pi / 180).real; 
-        
-    tempX_ = cmath.cos((angle_p_angle + bias) * cmath.pi/ 180).real * tempDist * cmath.cos(thetas_rad).real + \
-            cmath.sin((angle_p_angle + bias) *   cmath.pi / 180).real * (tempDist *  cmath.sin(thetas_rad).real)
-    tempY_ = -cmath.sin((angle_p_angle + bias) * cmath.pi / 180).real * tempDist * cmath.cos(thetas_rad).real +\
-            cmath.cos((angle_p_angle+ bias) *   cmath.pi / 180).real * (tempDist *  cmath.sin(thetas_rad).real)
-    tempX = tempX_ + angle_p_x
-    tempY = tempY_ - angle_p_y
-    if(tempX != 0.0):
-        Dist = cmath.sqrt(tempX * tempX + tempY * tempY).real
-        theta = cmath.atan(tempY / tempX).real
-    else:
-        Dist = 0
-        theta = 0
-    return Dist,theta
-
-def rightCalc(tempDist_,thetas_rad):
-    tempDist = (tempDist_ - angle_p_x) / cmath.cos((angle_p_angle + bias + (thetas_rad*180/cmath.pi)) * cmath.pi / 180).real; 
-        
-    tempX_ = cmath.cos(-(angle_p_angle + bias) * cmath.pi/ 180).real * tempDist * cmath.cos(thetas_rad).real + \
-            cmath.sin(-(angle_p_angle + bias) *   cmath.pi / 180).real * (tempDist *  cmath.sin(thetas_rad).real)
-    tempY_ = -cmath.sin(-(angle_p_angle + bias) * cmath.pi / 180).real * tempDist * cmath.cos(thetas_rad).real +\
-            cmath.cos(-(angle_p_angle+ bias) *   cmath.pi / 180).real * (tempDist *  cmath.sin(thetas_rad).real)
-    tempX = tempX_ + angle_p_x
-    tempY = tempY_ + angle_p_y
-    if(tempX != 0.0):
-        Dist = cmath.sqrt(tempX * tempX + tempY * tempY).real
-        theta = cmath.atan(tempY / tempX).real
-    else:
-        Dist = 0
-        theta = 0
-    return Dist,theta
+from CalcLidar import calclidar
+import cmath 
+import time
 
 
 fig = plt.figure(figsize=(8,8))
@@ -87,93 +21,108 @@ ser = serial.Serial(port='/dev/tty.SLAB_USBtoUART',
                     parity='N',
                     stopbits=1)
 
-ser.write([0xA5,0xA5,0xA5,0xA5,0x00,0x64,0x00,0x00,0x64])
+def stoplidar(ser):
+    ser.write([0xA5,0xA5,0xA5,0xA5,0x00,0x64,0x00,0x00,0x64])
 
-packetHeader = b'\x00\x00\x00\x00'
-while packetHeader !=b'\xa5\xa5\xa5\xa5':
-    packetHeader = ser.read(size=4)
+    packetHeader = b'\x00\x00\x00\x00'
+    while packetHeader !=b'\xa5\xa5\xa5\xa5':
+        packetHeader = ser.read(size=4)
 
-address = ser.read(1)
-commandType = ser.read(1)
-dataLength = ser.read(2)
-checkCode = ser.read(1)
+    address = ser.read(1)
+    commandType = ser.read(1)
+    dataLength = ser.read(2)
+    checkCode = ser.read(1)
 
-addressNumber = int.from_bytes(address,"little")
-commandTypeNumber = int.from_bytes(commandType,"little")
-dataLengthNumber = int.from_bytes(dataLength,"little")
-checkCodeNumber = int.from_bytes(checkCode,"little")
+    addressNumber = int.from_bytes(address,"little")
+    commandTypeNumber = int.from_bytes(commandType,"little")
+    dataLengthNumber = int.from_bytes(dataLength,"little")
+    checkCodeNumber = int.from_bytes(checkCode,"little")
+
+def startlidar(ser):
+    ser.write([0xA5,0xA5,0xA5,0xA5,0x00,0x63,0x00,0x00,0x63])
+    # 最初の一回のみデータ無しのパケットが返される
+    datas = ser.read(9)
+    print(f"{datas},")
 
 
-ser.write([0xA5,0xA5,0xA5,0xA5,0x00,0x61,0x00,0x00,0x61])
-datas = ser.read(18)
-
-packetHeaderNumber = hex(int.from_bytes(datas[0:4],"little"))
-addressNumber = hex(datas[4])
-commandTypeNumber = hex(datas[5])
-dataLengthNumber = int(datas[7]<<8 | datas[6])
-K0 = float(datas[9]<<8 | datas[8])
-B0 = float(datas[11]<<8 | datas[10])
-K1 = float(datas[13]<<8 | datas[12])
-B1 = float(datas[15]<<8 | datas[14])
-d_compensateK0 = K0/10000.0
-d_compensateB0 = B0/10000.0
-d_compensateK1 = K1/10000.0
-d_compensateB1 = B1/10000.0
-bias = float(datas[16])/10
-checkCode = hex(datas[17])
-
-print(f"d_compensateK0:{d_compensateK0},\
-    d_compensateB0:{d_compensateB0},\
-    d_compensateK1:{d_compensateK1},\
-    d_compensateB1:{d_compensateB1},\
-    bias:{bias}")
-
-thetas_deg =[] 
-thetas_rad =[] 
-for i in range(160):
-    if i < 80:
-        thetas_deg.append(leftCamThetaCalc(i))
-        thetas_rad.append(leftCamThetaCalc(i)/180*cmath.pi) 
-    else:
-        thetas_deg.append(rightCamThetaCalc(i))
-        thetas_rad.append(rightCamThetaCalc(i)/180*cmath.pi) 
-
-ser.write([0xA5,0xA5,0xA5,0xA5,0x00,0x63,0x00,0x00,0x63])
-# 最初の一回のみデータ無しのパケットが返される
-datas = ser.read(9)
-print(f"{datas},")
-
-while True:
-    datas = ser.read(331)
-
+def getCalcData(ser):
+    ser.write([0xA5,0xA5,0xA5,0xA5,0x00,0x61,0x00,0x00,0x61])
+    datas = ser.read(18)
     packetHeaderNumber = hex(int.from_bytes(datas[0:4],"little"))
     addressNumber = hex(datas[4])
     commandTypeNumber = hex(datas[5])
     dataLengthNumber = int(datas[7]<<8 | datas[6])
-    ENV = int(datas[9]<<8 | datas[8])
+    K0 = float(datas[9]<<8 | datas[8])
+    B0 = float(datas[11]<<8 | datas[10])
+    K1 = float(datas[13]<<8 | datas[12])
+    B1 = float(datas[15]<<8 | datas[14])
 
-    distance = []
+    cl = calclidar(K0,B0,K1,B1,datas[16])
+
+    checkCode = hex(datas[17])
+
+    print(f"d_compensateK0:{cl.d_compensateK0},\
+        d_compensateB0:{cl.d_compensateB0},\
+        d_compensateK1:{cl.d_compensateK1},\
+        d_compensateB1:{cl.d_compensateB1},\
+        bias:{cl.bias}")
+    
+    return cl
+
+
+stoplidar(ser)
+cl = getCalcData(ser)
+startlidar(ser)
+
+while True:
+    datas = ser.read(331)
+    
+    if(cl.dataCheck(datas)!=True):
+        ser.close()
+        time.sleep(0.1)
+        ser = serial.Serial(port='/dev/tty.SLAB_USBtoUART',
+                    baudrate=921600,
+                    timeout=5.0,
+                    bytesize=8,
+                    parity='N',
+                    stopbits=1)
+        time.sleep(0.1)
+
+        stoplidar(ser)
+        time.sleep(0.1)
+        cl = getCalcData(ser)
+        startlidar(ser)
+        continue
+
+    packetHeaderNumber = hex(int.from_bytes(datas[0:4],"little"))
+    # print(f"packetHeader:{packetHeaderNumber}")
+
+    addressNumber = hex(datas[4])
+    comemandTypeNumber = hex(datas[5])
+    dataLengthNumber = int(datas[7]<<8 | datas[6])
+    ENV = int(datas[9]<<8 | datas[8])
+    checkCodeNumber = hex(datas[330])
+    # print(f"checkCodeNumber:{checkCodeNumber}")
+
+
     distance2 = []
     thetas = []
     for i in range(int(len(datas[10:-1])/2)):
         tempDist = (datas[8+2*i+1]<<8 | datas[8+2*i]) & 0x01ff
-        
         if i < 80:
-            Dist,theta = leftCalc(tempDist,thetas_rad[i])
+            Dist,theta = cl.leftCalc(tempDist,i)
         else:
-            Dist,theta = rightCalc(tempDist,thetas_rad[i])
+            Dist,theta = cl.rightCalc(tempDist,i)
 
-        if Dist > 300:
-            distance2.append(0)
-        else:
-            distance2.append(Dist)
-        distance.append((datas[8+2*i+1]<<8 | datas[8+2*i]) & 0x01ff)
+        # if Dist > 300:
+        #     distance2.append(0)
+        # else:
+        #     distance2.append(Dist)
+        distance2.append(Dist)
         thetas.append(theta)
-        
 
-
+    # print(f"cCV:{hex(cCV)}, check:{checkCodeNumber}, sum:{hex(sum(datas[4:330]))}")        
     
-    checkCodeNumber = hex(datas[330])
 
     # print(f"header:{packetHeaderNumber},\
     #     address:{addressNumber},\
@@ -201,11 +150,10 @@ while True:
     # line2 = ax.scatter(list(map(lambda x:x+(20)/180*cmath.pi,rtheta)), distance2[80:], c="blue", s=5)
     line = ax.scatter(ltheta, distance2[:80], c="red", s=5)
     line2 = ax.scatter(rtheta, distance2[80:], c="blue", s=5)
-    ax.set_theta_offset(math.pi / 2)
-    ax.set_theta_offset(math.pi / 2)
+    ax.set_theta_offset(cmath.pi / 2)
+    ax.set_theta_offset(cmath.pi / 2)
     plt.pause(0.00001)
 
-    distance.clear()
     distance2.clear()
     
     
