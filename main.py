@@ -15,6 +15,10 @@ d_compensateK1 = 0.0
 d_compensateB1 = 0.0
 bias = 0.0
 
+angle_p_x =  1.22
+angle_p_y = 5.315
+angle_p_angle = 22.5
+
 def leftCamThetaCalc(measurement_point):
     measurement_point = 80-measurement_point
     if d_compensateB0 > 1:
@@ -33,13 +37,48 @@ def rightCamThetaCalc(measurement_point):
     
     return tempTheta
 
+def leftCalc(tempDist_,thetas_rad):
+    tempDist = (tempDist_ - angle_p_x) / cmath.cos((angle_p_angle +bias - (thetas_rad*180/cmath.pi)) * cmath.pi / 180).real; 
+        
+    tempX_ = cmath.cos((angle_p_angle + bias) * cmath.pi/ 180).real * tempDist * cmath.cos(thetas_rad).real + \
+            cmath.sin((angle_p_angle + bias) *   cmath.pi / 180).real * (tempDist *  cmath.sin(thetas_rad).real)
+    tempY_ = -cmath.sin((angle_p_angle + bias) * cmath.pi / 180).real * tempDist * cmath.cos(thetas_rad).real +\
+            cmath.cos((angle_p_angle+ bias) *   cmath.pi / 180).real * (tempDist *  cmath.sin(thetas_rad).real)
+    tempX = tempX_ + angle_p_x
+    tempY = tempY_ - angle_p_y
+    if(tempX != 0.0):
+        Dist = cmath.sqrt(tempX * tempX + tempY * tempY).real
+        theta = cmath.atan(tempY / tempX).real
+    else:
+        Dist = 0
+        theta = 0
+    return Dist,theta
+
+def rightCalc(tempDist_,thetas_rad):
+    tempDist = (tempDist_ - angle_p_x) / cmath.cos((angle_p_angle + bias + (thetas_rad*180/cmath.pi)) * cmath.pi / 180).real; 
+        
+    tempX_ = cmath.cos(-(angle_p_angle + bias) * cmath.pi/ 180).real * tempDist * cmath.cos(thetas_rad).real + \
+            cmath.sin(-(angle_p_angle + bias) *   cmath.pi / 180).real * (tempDist *  cmath.sin(thetas_rad).real)
+    tempY_ = -cmath.sin(-(angle_p_angle + bias) * cmath.pi / 180).real * tempDist * cmath.cos(thetas_rad).real +\
+            cmath.cos(-(angle_p_angle+ bias) *   cmath.pi / 180).real * (tempDist *  cmath.sin(thetas_rad).real)
+    tempX = tempX_ + angle_p_x
+    tempY = tempY_ + angle_p_y
+    if(tempX != 0.0):
+        Dist = cmath.sqrt(tempX * tempX + tempY * tempY).real
+        theta = cmath.atan(tempY / tempX).real
+    else:
+        Dist = 0
+        theta = 0
+    return Dist,theta
+
+
 fig = plt.figure(figsize=(8,8))
 ax = fig.add_subplot(111, projection='polar')
 ax.set_theta_direction(-1)
 ax.set_theta_zero_location('N')
 ax.set_title('lidar (exit: Key E)',fontsize=18)
-
 plt.connect('key_press_event', lambda event: exit(1) if event.key == 'e' else None)
+
 
 ser = serial.Serial(port='/dev/tty.SLAB_USBtoUART',
                     baudrate=921600,
@@ -95,13 +134,9 @@ for i in range(160):
     if i < 80:
         thetas_deg.append(leftCamThetaCalc(i))
         thetas_rad.append(leftCamThetaCalc(i)/180*cmath.pi) 
-        print(f"l:{leftCamThetaCalc(i)}")
     else:
         thetas_deg.append(rightCamThetaCalc(i))
         thetas_rad.append(rightCamThetaCalc(i)/180*cmath.pi) 
-        print(f"r:{rightCamThetaCalc(i)}")
-
-print(f"thetas:{thetas_deg}")
 
 ser.write([0xA5,0xA5,0xA5,0xA5,0x00,0x63,0x00,0x00,0x63])
 # 最初の一回のみデータ無しのパケットが返される
@@ -119,14 +154,21 @@ while True:
 
     distance = []
     distance2 = []
+    thetas = []
     for i in range(int(len(datas[10:-1])/2)):
         tempDist = (datas[8+2*i+1]<<8 | datas[8+2*i]) & 0x01ff
-        cdist = (tempDist-0) / cmath.cos((0 +bias - (thetas_deg[i])) * cmath.pi / 180).real; 
-        if cdist > 300:
-            distance2.append(200)
+        
+        if i < 80:
+            Dist,theta = leftCalc(tempDist,thetas_rad[i])
         else:
-            distance2.append(cdist)
+            Dist,theta = rightCalc(tempDist,thetas_rad[i])
+
+        if Dist > 300:
+            distance2.append(0)
+        else:
+            distance2.append(Dist)
         distance.append((datas[8+2*i+1]<<8 | datas[8+2*i]) & 0x01ff)
+        thetas.append(theta)
         
 
 
@@ -140,11 +182,13 @@ while True:
     #     datas:{distance},\
     #     checkcode:{checkCodeNumber}")
     
-    ltheta = thetas_rad[:80]
-    rtheta = thetas_rad[80:]
-    #ltheta = list(reversed(thetas_rad[0:80]))
+    ltheta = thetas[:80]
+    rtheta = thetas[80:]
     # print(f"ltheta:{ltheta}")
     # print(f"rtheta:{rtheta}")
+    #ltheta = list(reversed(thetas_rad[0:80]))
+    # print(f"ltheta:{list(map(lambda x:x*180/cmath.pi,ltheta))}")
+    # print(f"rtheta:{list(map(lambda x:x*180/cmath.pi,rtheta))}")
 
 
     # line = ax.scatter(list(map(lambda x:-(x-thetas_rad[79])+25/180*cmath.pi,ltheta)), distance2[:80], c="red", s=5)
@@ -153,12 +197,13 @@ while True:
         line.remove()
     if('line2' in locals()):
         line2.remove()
-    line = ax.scatter(list(map(lambda x:x+(-20)/180*cmath.pi,ltheta)), distance2[:80], c="red", s=5)
-    line2 = ax.scatter(list(map(lambda x:x+(20)/180*cmath.pi,rtheta)), distance2[80:], c="blue", s=5)
-    # line = ax.scatter(ltheta, distance2[:80], c="red", s=5)
-    # line2 = ax.scatter(rtheta, distance2[80:], c="blue", s=5)
+    # line = ax.scatter(list(map(lambda x:x+(-20)/180*cmath.pi,ltheta)), distance2[:80], c="red", s=5)
+    # line2 = ax.scatter(list(map(lambda x:x+(20)/180*cmath.pi,rtheta)), distance2[80:], c="blue", s=5)
+    line = ax.scatter(ltheta, distance2[:80], c="red", s=5)
+    line2 = ax.scatter(rtheta, distance2[80:], c="blue", s=5)
     ax.set_theta_offset(math.pi / 2)
-    plt.pause(0.0001)
+    ax.set_theta_offset(math.pi / 2)
+    plt.pause(0.00001)
 
     distance.clear()
     distance2.clear()
