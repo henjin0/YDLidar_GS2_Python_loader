@@ -1,17 +1,16 @@
-from turtle import distance
 import serial
 import matplotlib.pyplot as plt
 from CalcLidar import calclidar
-import cmath 
 import time
 
 
-fig = plt.figure(figsize=(8,8))
-ax = fig.add_subplot(111, projection='polar')
-ax.set_theta_direction(-1)
-ax.set_theta_zero_location('N')
-ax.set_title('lidar (exit: Key E)',fontsize=18)
-plt.connect('key_press_event', lambda event: exit(1) if event.key == 'e' else None)
+# note: グラフ化して確認したい際にコメントアウト解除する。
+# fig = plt.figure(figsize=(8,8))
+# ax = fig.add_subplot(111, projection='polar')
+# ax.set_theta_direction(-1)
+# ax.set_theta_zero_location('N')
+# ax.set_title('lidar (exit: Key E)',fontsize=18)
+# plt.connect('key_press_event', lambda event: exit(1) if event.key == 'e' else None)
 
 
 ser = serial.Serial(port='/dev/tty.SLAB_USBtoUART',
@@ -95,15 +94,12 @@ while True:
         continue
 
     packetHeaderNumber = hex(int.from_bytes(datas[0:4],"little"))
-    # print(f"packetHeader:{packetHeaderNumber}")
 
     addressNumber = hex(datas[4])
     comemandTypeNumber = hex(datas[5])
     dataLengthNumber = int(datas[7]<<8 | datas[6])
     ENV = int(datas[9]<<8 | datas[8])
     checkCodeNumber = hex(datas[330])
-    # print(f"checkCodeNumber:{checkCodeNumber}")
-
 
     distance2 = []
     thetas = []
@@ -114,73 +110,27 @@ while True:
         else:
             Dist,theta = cl.rightCalc(tempDist,i)
 
-        # if Dist > 300:
-        #     distance2.append(0)
-        # else:
-        #     distance2.append(Dist)
         distance2.append(Dist)
         thetas.append(theta)
 
-    # print(f"cCV:{hex(cCV)}, check:{checkCodeNumber}, sum:{hex(sum(datas[4:330]))}")        
-    
-
-    # print(f"header:{packetHeaderNumber},\
-    #     address:{addressNumber},\
-    #     command{commandTypeNumber},\
-    #     datalen:{dataLengthNumber},\
-    #     datas:{distance},\
-    #     checkcode:{checkCodeNumber}")
     
     ltheta = thetas[:80]
     rtheta = thetas[80:]
-    # print(f"ltheta:{ltheta}")
-    # print(f"rtheta:{rtheta}")
-    #ltheta = list(reversed(thetas_rad[0:80]))
-    # print(f"ltheta:{list(map(lambda x:x*180/cmath.pi,ltheta))}")
-    # print(f"rtheta:{list(map(lambda x:x*180/cmath.pi,rtheta))}")
-
-
-    # line = ax.scatter(list(map(lambda x:-(x-thetas_rad[79])+25/180*cmath.pi,ltheta)), distance2[:80], c="red", s=5)
-    # line = ax.scatter(list(map(lambda x:-(x-thetas_rad[80])-25/180*cmath.pi,rtheta)), distance2[80:], c="blue", s=5)
-    if('line' in locals()):
-        line.remove()
-    if('line2' in locals()):
-        line2.remove()
-    # line = ax.scatter(list(map(lambda x:x+(-20)/180*cmath.pi,ltheta)), distance2[:80], c="red", s=5)
-    # line2 = ax.scatter(list(map(lambda x:x+(20)/180*cmath.pi,rtheta)), distance2[80:], c="blue", s=5)
-    line = ax.scatter(ltheta, distance2[:80], c="red", s=5)
-    line2 = ax.scatter(rtheta, distance2[80:], c="blue", s=5)
-    ax.set_theta_offset(cmath.pi / 2)
-    ax.set_theta_offset(cmath.pi / 2)
-    plt.pause(0.00001)
+    
+    # note: グラフ化した際にコメントアウトを解除する。
+    # if('line' in locals()):
+    #     line.remove()
+    # if('line2' in locals()):
+    #     line2.remove()
+    # line = ax.scatter(ltheta, distance2[:80], c="red", s=5)
+    # line2 = ax.scatter(rtheta, distance2[80:], c="blue", s=5)
+    # ax.set_theta_offset(cmath.pi / 2)
+    # ax.set_theta_offset(cmath.pi / 2)
+    # plt.pause(0.00001)
 
     distance2.clear()
     
-    
 
-# 4+1+1+2+322+1 = 331
-# datas = []
-# while datas[0:3] !=b'\xa5\xa5\xa5\xa5':
-#     datas = ser.read_until(size=331)
-
-# # while packetHeader !=b'\xa5\xa5\xa5\xa5':
-# #     packetHeader = ser.read(4)
-# # address = ser.read(1)
-# # commandType = ser.read(1)
-# # dataLength = ser.read(2)
-# # checkCode = ser.read(1)
-
-# packetHeaderNumber = datas[0:3]
-# addressNumber = int.from_bytes(datas[4],"little")
-# commandTypeNumber = int.from_bytes(datas[5],"little")
-# dataLengthNumber = int.from_bytes(datas[6:7],"little")
-
-# checkCodeNumber = int.from_bytes(datas[330],"little")
-
-# tmpString = ""
-# lines = list()
-# angles = list()
-# distances = list()
 
 ser.write([0xA5,0xA5,0xA5,0xA5,0x00,0x64,0x00,0x00,0x64])
 ser.close()
