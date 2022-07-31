@@ -86,16 +86,16 @@ class YDLidar_GS2:
 
         return checkCode, packetHeaderNumber, addressNumber, commandTypeNumber, dataLengthNumber
 
-    def getData(self):
-        datas = self.ser.read(331)
+def getData(self):
+        while(1):
+            datas = self.ser.read(331)
 
-        if(self.cl.dataCheck(datas) != True):
-            time.sleep(0.1)
-            time.sleep(0.1)
-            self.stoplidar(self.ser)
-            time.sleep(0.1)
-            self.getCalcData(self.ser)
-            self.startlidar(self.ser)
-            return []
+            if(self.cl.dataCheck(datas) != True):
+                print("Data corrupted. Rerun lidar...")
+                self.stoplidar()
+                self.startlidar()
+                continue
+
+            break
 
         return self.cl.receiveDataCalc(datas)
